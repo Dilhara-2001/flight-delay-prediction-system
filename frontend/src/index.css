@@ -1,16 +1,16 @@
 /* =========================================
-   GLOBAL RESET — Modern Dark Aviation Theme
+   GLOBAL RESET — Modern Aviation Theme
    ========================================= */
 
 :root {
   font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  color: #e6edf7;
-  background: #05080f;
+  color: #0a2342;
+  background: #eef5fc;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 *,
@@ -32,7 +32,7 @@ body,
 body {
   min-height: 100vh;
   overflow-x: hidden;
-  background: #05080f;
+  background: linear-gradient(135deg, #f8fbff 0%, #e8f2fc 45%, #f7f9fc 70%, #fff4f5 100%);
 }
 
 button,
@@ -41,24 +41,22 @@ input {
   color: inherit;
 }
 
-/* Custom neon scrollbar */
 ::-webkit-scrollbar {
   width: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #05080f;
+  background: #edf4fb;
 }
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #1e5eb8, #bf0a30);
+  background: linear-gradient(180deg, #002868, #3c6eaf, #bf0a30);
   border-radius: 10px;
-  border: 2px solid #05080f;
+  border: 2px solid #edf4fb;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #3b82f6, #e11d48);
+  background: linear-gradient(180deg, #002868, #bf0a30);
 }
 
-/* Selection */
 ::selection {
-  background: rgba(59, 130, 246, 0.4);
-  color: #ffffff;
+  background: rgba(0, 40, 104, 0.18);
+  color: #002868;
 }

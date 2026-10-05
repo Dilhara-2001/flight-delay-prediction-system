@@ -19,18 +19,12 @@ function App() {
 
   const handleChange = (event) => {
     const { name, value } = event.target;
-
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
-
+    setFormData({ ...formData, [name]: value });
     setError("");
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-
     setError("");
     setResult(null);
     setLoading(true);
@@ -38,9 +32,7 @@ function App() {
     try {
       const response = await fetch("/predict", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
           carrier: formData.carrier.trim().toUpperCase(),
@@ -52,11 +44,7 @@ function App() {
       });
 
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Unable to generate prediction.");
-      }
-
+      if (!response.ok) throw new Error(data.error || "Unable to generate prediction.");
       setResult(data);
     } catch (err) {
       setError(err.message);
@@ -76,7 +64,6 @@ function App() {
       elapsed_time: "",
       distance: "",
     });
-
     setResult(null);
     setError("");
   };
@@ -87,12 +74,10 @@ function App() {
     <div className="app">
       {/* Animated airplanes in background */}
       <div className="air-traffic" aria-hidden="true">
-        {/* Contrail streaks */}
         <div className="contrail contrail-1"></div>
         <div className="contrail contrail-2"></div>
         <div className="contrail contrail-3"></div>
 
-        {/* Large planes flying across */}
         <div className="sky-plane plane-1">
           <span className="plane-body">✈</span>
           <span className="plane-light"></span>
@@ -114,28 +99,23 @@ function App() {
           <span className="plane-light"></span>
         </div>
 
-        {/* Dashed flight trails */}
         <div className="flight-trail trail-1"></div>
         <div className="flight-trail trail-2"></div>
       </div>
 
-      {/* Decorative background glows */}
       <div className="background-decoration decoration-one"></div>
       <div className="background-decoration decoration-two"></div>
 
       <main className="main-wrapper">
-        {/* Top branding */}
+        {/* Brand bar */}
         <div className="brand-bar">
           <div className="brand">
             <div className="brand-icon">✈</div>
             <div>
               <span className="brand-title">LibertyWing AI</span>
-              <span className="brand-subtitle">
-                Departure Delay Prediction
-              </span>
+              <span className="brand-subtitle">Departure Delay Prediction</span>
             </div>
           </div>
-
           <div className="model-badge">
             <span className="status-dot"></span>
             Model Live
@@ -143,8 +123,32 @@ function App() {
         </div>
 
         <section className="prediction-card">
-          {/* Hero */}
+          {/* ============ HERO WITH MAP ============ */}
           <div className="hero-section">
+            {/* Map grid */}
+            <div className="hero-map-grid" aria-hidden="true"></div>
+            <div className="hero-map-shape" aria-hidden="true"></div>
+
+            {/* Radar sweep */}
+            <div className="hero-radar" aria-hidden="true"></div>
+
+            {/* Flight path curves */}
+            <div className="map-path map-path-1" aria-hidden="true"></div>
+            <div className="map-path map-path-2" aria-hidden="true"></div>
+            <div className="map-path map-path-3" aria-hidden="true"></div>
+
+            {/* Animated planes along paths */}
+            <div className="map-plane map-plane-1" aria-hidden="true">✈</div>
+            <div className="map-plane map-plane-2" aria-hidden="true">✈</div>
+            <div className="map-plane map-plane-3" aria-hidden="true">✈</div>
+
+            {/* Airport dots */}
+            <div className="map-airport airport-1" aria-hidden="true"></div>
+            <div className="map-airport airport-2" aria-hidden="true"></div>
+            <div className="map-airport airport-3" aria-hidden="true"></div>
+            <div className="map-airport airport-4" aria-hidden="true"></div>
+
+            {/* Hero text content */}
             <div className="hero-content">
               <div className="eyebrow">
                 <span>★</span>
@@ -163,36 +167,42 @@ function App() {
               </p>
             </div>
 
-            <div className="hero-plane" aria-hidden="true">
-              ✈
+            {/* Live status strip */}
+            <div className="hero-status-strip">
+              <div className="hero-stat">
+                <span className="hero-stat-label">Status</span>
+                <span className="hero-stat-value live">Live</span>
+              </div>
+              <div className="hero-stat">
+                <span className="hero-stat-label">Delay Definition</span>
+                <span className="hero-stat-value">15+ min</span>
+              </div>
             </div>
           </div>
 
-          {/* Animated gradient divider */}
+          {/* Flag divider */}
           <div className="flag-divider">
             <span></span>
             <span></span>
             <span></span>
           </div>
 
+          {/* Form */}
           <form onSubmit={handleSubmit} className="prediction-form">
             <div className="form-heading">
               <div>
                 <h2>Flight Information</h2>
                 <p>Complete all fields to generate a prediction.</p>
               </div>
-
               <span className="required-note">* All fields required</span>
             </div>
 
             <div className="form-grid">
-              {/* Carrier */}
               <div className="form-group">
                 <label htmlFor="carrier">
                   <span className="field-icon">✦</span>
                   Operating Carrier
                 </label>
-
                 <input
                   id="carrier"
                   type="text"
@@ -206,17 +216,14 @@ function App() {
                   title="Enter a valid 2 or 3 character airline carrier code"
                   required
                 />
-
                 <small>2–3 character airline code</small>
               </div>
 
-              {/* Date */}
               <div className="form-group">
                 <label htmlFor="flight_date">
                   <span className="field-icon">◆</span>
                   Flight Date
                 </label>
-
                 <input
                   id="flight_date"
                   type="date"
@@ -225,17 +232,14 @@ function App() {
                   onChange={handleChange}
                   required
                 />
-
                 <small>Select the scheduled flight date</small>
               </div>
 
-              {/* Origin */}
               <div className="form-group">
                 <label htmlFor="origin">
                   <span className="field-icon origin-dot">●</span>
                   Origin Airport
                 </label>
-
                 <input
                   id="origin"
                   type="text"
@@ -249,17 +253,14 @@ function App() {
                   title="Enter a valid 3-letter airport code"
                   required
                 />
-
                 <small>3-letter departure airport code</small>
               </div>
 
-              {/* Destination */}
               <div className="form-group">
                 <label htmlFor="destination">
                   <span className="field-icon destination-dot">●</span>
                   Destination Airport
                 </label>
-
                 <input
                   id="destination"
                   type="text"
@@ -273,17 +274,14 @@ function App() {
                   title="Enter a valid 3-letter airport code"
                   required
                 />
-
                 <small>3-letter arrival airport code</small>
               </div>
 
-              {/* Departure */}
               <div className="form-group">
                 <label htmlFor="departure_time">
                   <span className="field-icon">↑</span>
                   Scheduled Departure
                 </label>
-
                 <input
                   id="departure_time"
                   type="time"
@@ -292,17 +290,14 @@ function App() {
                   onChange={handleChange}
                   required
                 />
-
                 <small>Scheduled departure time</small>
               </div>
 
-              {/* Arrival */}
               <div className="form-group">
                 <label htmlFor="arrival_time">
                   <span className="field-icon">↓</span>
                   Scheduled Arrival
                 </label>
-
                 <input
                   id="arrival_time"
                   type="time"
@@ -311,17 +306,14 @@ function App() {
                   onChange={handleChange}
                   required
                 />
-
                 <small>Scheduled arrival time</small>
               </div>
 
-              {/* Duration */}
               <div className="form-group">
                 <label htmlFor="elapsed_time">
                   <span className="field-icon">◷</span>
                   Flight Duration
                 </label>
-
                 <div className="input-with-unit">
                   <input
                     id="elapsed_time"
@@ -333,20 +325,16 @@ function App() {
                     min="1"
                     required
                   />
-
                   <span>min</span>
                 </div>
-
                 <small>Scheduled elapsed flight time</small>
               </div>
 
-              {/* Distance */}
               <div className="form-group">
                 <label htmlFor="distance">
                   <span className="field-icon">↔</span>
                   Flight Distance
                 </label>
-
                 <div className="input-with-unit">
                   <input
                     id="distance"
@@ -358,28 +346,17 @@ function App() {
                     min="1"
                     required
                   />
-
                   <span>mi</span>
                 </div>
-
                 <small>Scheduled route distance</small>
               </div>
             </div>
 
             <div className="button-row">
-              <button
-                type="button"
-                className="clear-button"
-                onClick={handleClear}
-              >
+              <button type="button" className="clear-button" onClick={handleClear}>
                 Clear Form
               </button>
-
-              <button
-                type="submit"
-                className="predict-button"
-                disabled={loading}
-              >
+              <button type="submit" className="predict-button" disabled={loading}>
                 {loading ? (
                   <>
                     <span className="loader"></span>
@@ -395,7 +372,6 @@ function App() {
             </div>
           </form>
 
-          {/* Error */}
           {error && (
             <div className="error-message">
               <div className="message-icon">!</div>
@@ -406,33 +382,19 @@ function App() {
             </div>
           )}
 
-          {/* Prediction */}
           {result && (
-            <div
-              className={`result-card ${
-                significantDelay ? "delay-result" : "ontime-result"
-              }`}
-            >
+            <div className={`result-card ${significantDelay ? "delay-result" : "ontime-result"}`}>
               <div className="result-top">
-                <div
-                  className={`result-icon ${
-                    significantDelay ? "warning-icon" : "success-icon"
-                  }`}
-                >
+                <div className={`result-icon ${significantDelay ? "warning-icon" : "success-icon"}`}>
                   {significantDelay ? "!" : "✓"}
                 </div>
-
                 <div className="result-heading">
-                  <span className="result-label">
-                    MACHINE LEARNING PREDICTION
-                  </span>
-
+                  <span className="result-label">MACHINE LEARNING PREDICTION</span>
                   <h2>
                     {significantDelay
                       ? "Significant Delay Predicted"
                       : "No Significant Delay Predicted"}
                   </h2>
-
                   <p>
                     {significantDelay
                       ? "This flight has been identified as having an increased risk of a significant departure delay."
@@ -445,24 +407,14 @@ function App() {
                 <div className="probability-section">
                   <div className="probability-header">
                     <span>Estimated delay probability</span>
-
-                    <strong>
-                      {Number(result.delay_probability).toFixed(2)}%
-                    </strong>
+                    <strong>{Number(result.delay_probability).toFixed(2)}%</strong>
                   </div>
-
                   <div className="probability-track">
                     <div
                       className="probability-fill"
-                      style={{
-                        width: `${Math.min(
-                          Number(result.delay_probability),
-                          100
-                        )}%`,
-                      }}
+                      style={{ width: `${Math.min(Number(result.delay_probability), 100)}%` }}
                     ></div>
                   </div>
-
                   <div className="probability-scale">
                     <span>0%</span>
                     <span>50%</span>
@@ -473,8 +425,7 @@ function App() {
 
               <div className="result-note">
                 <span>i</span>
-                A significant delay is defined as a departure delay of
-                15 minutes or more.
+                A significant delay is defined as a departure delay of 15 minutes or more.
               </div>
             </div>
           )}
@@ -486,10 +437,7 @@ function App() {
             <span></span>
             <span></span>
           </div>
-
-          <p>
-            LibertyWing AI • U.S. Flight Delay Intelligence
-          </p>
+          <p>LibertyWing AI • U.S. Flight Delay Intelligence</p>
           <small>
             Predictions are estimates based on patterns learned from historical
             flight data and should not be treated as guaranteed outcomes.
