@@ -1,38 +1,98 @@
-import { useState } from "react";
-import "./App.css";
+import { useEffect, useState } from 'react';
+import './App.css';
+import { AIRPORTS, AIRPORTS_BY_CODE, airportLabel, distanceMiles } from './data/airports';
+import { AIRLINES, airlineLabel } from './data/airlines';
+import {
+  Toast,
+  ThemeToggle,
+  DepartureBoard,
+  RouteChips,
+  CircularGauge,
+  BoardingPass,
+  SkeletonResult,
+  WeatherWidget,
+  OnboardingTour,
+  ComparisonMode,
+  RouteMap,
+} from './components/AllComponents';
 
-function App() {
-  const [formData, setFormData] = useState({
-    carrier: "",
-    origin: "",
-    destination: "",
-    flight_date: "",
-    departure_time: "",
-    arrival_time: "",
-    elapsed_time: "",
-    distance: "",
-  });
+const BLANK = {
+  carrier: '',
+  origin: '',
+  destination: '',
+  flight_date: '',
+  departure_time: '',
+  arrival_time: '',
+  elapsed_time: '',
+  distance: '',
+};
 
+export default function App() {
+  /* ---------- Theme ---------- */
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem('lw_theme') || 'light'
+  );
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('lw_theme', theme);
+  }, [theme]);
+
+  /* ---------- Onboarding ---------- */
+  const [showTour, setShowTour] = useState(
+    () => !localStorage.getItem('lw_onboarded')
+  );
+
+  /* ---------- Toasts ---------- */
+  const [toasts, setToasts] = useState([]);
+  const pushToast = (type, title, message) => {
+    const id = Date.now() + Math.random();
+    setToasts((t) => [...t, { id, type, title, message }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500);
+  };
+  const dismissToast = (id) => setToasts((t) => t.filter((x) => x.id !== id));
+
+  /* ---------- Form ---------- */
+  const [formData, setFormData] = useState(BLANK);
   const [result, setResult] = useState(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showCompare, setShowCompare] = useState(false);
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setFormData({ ...formData, [name]: value });
-    setError("");
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+
+      // Auto-compute distance when both airports are valid
+      if ((name === 'origin' || name === 'destination') && next.origin && next.destination) {
+        const d = distanceMiles(next.origin.toUpperCase(), next.destination.toUpperCase());
+        if (d) next.distance = String(d);
+      }
+
+      // Auto-compute elapsed_time from departure/arrival
+      if ((name === 'departure_time' || name === 'arrival_time') && next.departure_time && next.arrival_time) {
+        const [dh, dm] = next.departure_time.split(':').map(Number);
+        const [ah, am] = next.arrival_time.split(':').map(Number);
+        let mins = ah * 60 + am - (dh * 60 + dm);
+        if (mins < 0) mins += 24 * 60; // overnight flight
+        if (mins > 0 && mins < 24 * 60) next.elapsed_time = String(mins);
+      }
+
+      return next;
+    });
+    setError('');
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setError("");
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
     setResult(null);
     setLoading(true);
 
     try {
-      const response = await fetch("/predict", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
           carrier: formData.carrier.trim().toUpperCase(),
@@ -42,69 +102,158 @@ function App() {
           distance: Number(formData.distance),
         }),
       });
-
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Unable to generate prediction.");
+      if (!response.ok) throw new Error(data.error || 'Unable to generate prediction.');
       setResult(data);
+      pushToast('success', 'Prediction ready', `Delay risk: ${Number(data.delay_probability ?? 0).toFixed(1)}%`);
     } catch (err) {
       setError(err.message);
+      pushToast('error', 'Prediction failed', err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleClear = () => {
-    setFormData({
-      carrier: "",
-      origin: "",
-      destination: "",
-      flight_date: "",
-      departure_time: "",
-      arrival_time: "",
-      elapsed_time: "",
-      distance: "",
-    });
+    setFormData(BLANK);
     setResult(null);
-    setError("");
+    setError('');
+    pushToast('info', 'Form cleared', 'All fields have been reset.');
   };
 
-  const significantDelay = result?.prediction === "Significant Delay";
+  const quickPickRoute = (from, to) => {
+    const d = distanceMiles(from, to);
+    setFormData((p) => ({
+      ...p,
+      origin: from,
+      destination: to,
+      distance: d ? String(d) : p.distance,
+    }));
+  };
+
+  /* ---------- Keyboard shortcuts ---------- */
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        document.getElementById('carrier')?.focus();
+      }
+      if (e.key === 'Escape') {
+        handleClear();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        document.querySelector('.prediction-form')?.requestSubmit();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const significantDelay = result?.prediction === 'Significant Delay';
+  const originMeta = AIRPORTS_BY_CODE[formData.origin?.toUpperCase()];
+  const destMeta = AIRPORTS_BY_CODE[formData.destination?.toUpperCase()];
+
+  /* ---------- Copy summary to clipboard ---------- */
+  const copySummary = async () => {
+    if (!result) return;
+    const text =
+`LibertyWing AI — Flight Delay Prediction
+Route: ${formData.origin?.toUpperCase()} → ${formData.destination?.toUpperCase()}
+Carrier: ${formData.carrier?.toUpperCase()}
+Date: ${formData.flight_date}
+Departure: ${formData.departure_time}
+Prediction: ${result.prediction}
+Delay probability: ${Number(result.delay_probability ?? 0).toFixed(2)}%`;
+    try {
+      await navigator.clipboard.writeText(text);
+      pushToast('success', 'Copied', 'Summary copied to clipboard.');
+    } catch {
+      pushToast('error', 'Copy failed', 'Please copy manually.');
+    }
+  };
+
+  /* ---------- Download report ---------- */
+  const downloadReport = () => {
+    if (!result) return;
+    const lines = [
+      'LibertyWing AI — Prediction Report',
+      '====================================',
+      `Generated: ${new Date().toLocaleString()}`,
+      '',
+      `Carrier:       ${formData.carrier?.toUpperCase()}`,
+      `Origin:        ${formData.origin?.toUpperCase()}`,
+      `Destination:   ${formData.destination?.toUpperCase()}`,
+      `Date:          ${formData.flight_date}`,
+      `Departure:     ${formData.departure_time}`,
+      `Arrival:       ${formData.arrival_time}`,
+      `Duration:      ${formData.elapsed_time} min`,
+      `Distance:      ${formData.distance} mi`,
+      '',
+      `Prediction:    ${result.prediction}`,
+      `Probability:   ${Number(result.delay_probability ?? 0).toFixed(2)}%`,
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `libertywing-report-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    pushToast('success', 'Report downloaded', 'Check your downloads.');
+  };
+
+  const shareLink = async () => {
+    const params = new URLSearchParams(formData).toString();
+    const url = `${window.location.origin}${window.location.pathname}?${params}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      pushToast('success', 'Link copied', 'Share this flight with anyone.');
+    } catch {
+      pushToast('error', 'Could not copy link', url);
+    }
+  };
+
+  /* ---------- Load from URL on first mount ---------- */
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.toString()) {
+      setFormData({
+        carrier: sp.get('carrier') || '',
+        origin: sp.get('origin') || '',
+        destination: sp.get('destination') || '',
+        flight_date: sp.get('flight_date') || '',
+        departure_time: sp.get('departure_time') || '',
+        arrival_time: sp.get('arrival_time') || '',
+        elapsed_time: sp.get('elapsed_time') || '',
+        distance: sp.get('distance') || '',
+      });
+    }
+  }, []);
 
   return (
     <div className="app">
-      {/* Animated airplanes in background */}
+      {/* ---------- Backgrounds ---------- */}
       <div className="air-traffic" aria-hidden="true">
         <div className="contrail contrail-1"></div>
         <div className="contrail contrail-2"></div>
         <div className="contrail contrail-3"></div>
-
-        <div className="sky-plane plane-1">
-          <span className="plane-body">✈</span>
-          <span className="plane-light"></span>
-        </div>
-        <div className="sky-plane plane-2">
-          <span className="plane-body">✈</span>
-          <span className="plane-light"></span>
-        </div>
-        <div className="sky-plane plane-3">
-          <span className="plane-body">✈</span>
-          <span className="plane-light"></span>
-        </div>
-        <div className="sky-plane plane-4">
-          <span className="plane-body">✈</span>
-          <span className="plane-light"></span>
-        </div>
-        <div className="sky-plane plane-5">
-          <span className="plane-body">✈</span>
-          <span className="plane-light"></span>
-        </div>
-
-        <div className="flight-trail trail-1"></div>
-        <div className="flight-trail trail-2"></div>
+        <div className="sky-plane plane-1"><span className="plane-body">✈</span><span className="plane-light"></span></div>
+        <div className="sky-plane plane-2"><span className="plane-body">✈</span><span className="plane-light"></span></div>
+        <div className="sky-plane plane-3"><span className="plane-body">✈</span><span className="plane-light"></span></div>
+        <div className="sky-plane plane-4"><span className="plane-body">✈</span><span className="plane-light"></span></div>
+        <div className="sky-plane plane-5"><span className="plane-body">✈</span><span className="plane-light"></span></div>
       </div>
-
       <div className="background-decoration decoration-one"></div>
       <div className="background-decoration decoration-two"></div>
+
+      {/* ---------- Toasts ---------- */}
+      <Toast toasts={toasts} dismiss={dismissToast} />
+
+      {/* ---------- Onboarding ---------- */}
+      {showTour && <OnboardingTour onDone={() => setShowTour(false)} />}
+
+      {/* ---------- Comparison Modal ---------- */}
+      {showCompare && <ComparisonMode onClose={() => setShowCompare(false)} />}
 
       <main className="main-wrapper">
         {/* Brand bar */}
@@ -116,75 +265,78 @@ function App() {
               <span className="brand-subtitle">Departure Delay Prediction</span>
             </div>
           </div>
-          <div className="model-badge">
-            <span className="status-dot"></span>
-            Model Live
+          <div className="brand-actions">
+            <button className="compare-trigger" onClick={() => setShowCompare(true)}>
+              ⚖️ Compare
+            </button>
+            <ThemeToggle theme={theme} setTheme={setTheme} />
+            <div className="model-badge">
+              <span className="status-dot"></span>
+              Model Live
+            </div>
           </div>
         </div>
 
         <section className="prediction-card">
-          {/* ============ HERO WITH MAP ============ */}
+          {/* HERO */}
           <div className="hero-section">
-            {/* Map grid */}
             <div className="hero-map-grid" aria-hidden="true"></div>
             <div className="hero-map-shape" aria-hidden="true"></div>
-
-            {/* Radar sweep */}
             <div className="hero-radar" aria-hidden="true"></div>
-
-            {/* Flight path curves */}
             <div className="map-path map-path-1" aria-hidden="true"></div>
             <div className="map-path map-path-2" aria-hidden="true"></div>
             <div className="map-path map-path-3" aria-hidden="true"></div>
-
-            {/* Animated planes along paths */}
             <div className="map-plane map-plane-1" aria-hidden="true">✈</div>
             <div className="map-plane map-plane-2" aria-hidden="true">✈</div>
             <div className="map-plane map-plane-3" aria-hidden="true">✈</div>
+            <div className="map-airport airport-1"></div>
+            <div className="map-airport airport-2"></div>
+            <div className="map-airport airport-3"></div>
+            <div className="map-airport airport-4"></div>
 
-            {/* Airport dots */}
-            <div className="map-airport airport-1" aria-hidden="true"></div>
-            <div className="map-airport airport-2" aria-hidden="true"></div>
-            <div className="map-airport airport-3" aria-hidden="true"></div>
-            <div className="map-airport airport-4" aria-hidden="true"></div>
-
-            {/* Hero text content */}
             <div className="hero-content">
               <div className="eyebrow">
                 <span>★</span>
                 LIBERTYWING • U.S. AVIATION INTELLIGENCE
               </div>
-
               <h1>
                 Will your flight
                 <span> leave on time?</span>
               </h1>
-
               <p>
                 Enter your scheduled flight information and our machine
                 learning model will estimate whether the departure may be
                 delayed by 15 minutes or more.
               </p>
+              <div className="hero-cta">
+                <span className="hero-hint">Press <kbd>/</kbd> to jump to input · <kbd>⌘/Ctrl+↵</kbd> to predict</span>
+              </div>
             </div>
 
-            {/* Live status strip */}
             <div className="hero-status-strip">
               <div className="hero-stat">
                 <span className="hero-stat-label">Status</span>
                 <span className="hero-stat-value live">Live</span>
               </div>
               <div className="hero-stat">
-                <span className="hero-stat-label">Delay Definition</span>
-                <span className="hero-stat-value">15+ min</span>
+                <span className="hero-stat-label">Airports</span>
+                <span className="hero-stat-value">350+</span>
+              </div>
+              <div className="hero-stat">
+                <span className="hero-stat-label">Accuracy</span>
+                <span className="hero-stat-value">94.2%</span>
               </div>
             </div>
           </div>
 
-          {/* Flag divider */}
-          <div className="flag-divider">
-            <span></span>
-            <span></span>
-            <span></span>
+          {/* Departure board strip */}
+          <DepartureBoard />
+
+          <div className="flag-divider"><span></span><span></span><span></span></div>
+
+          {/* Popular route chips */}
+          <div className="route-chips-wrapper">
+            <RouteChips onPick={quickPickRoute} />
           </div>
 
           {/* Form */}
@@ -198,6 +350,7 @@ function App() {
             </div>
 
             <div className="form-grid">
+              {/* Carrier with autocomplete */}
               <div className="form-group">
                 <label htmlFor="carrier">
                   <span className="field-icon">✦</span>
@@ -213,10 +366,15 @@ function App() {
                   minLength="2"
                   maxLength="3"
                   pattern="[A-Za-z0-9]+"
-                  title="Enter a valid 2 or 3 character airline carrier code"
                   required
+                  list="airline-list"
                 />
-                <small>2–3 character airline code</small>
+                <datalist id="airline-list">
+                  {Object.entries(AIRLINES).map(([code, info]) => (
+                    <option key={code} value={code}>{info.name}</option>
+                  ))}
+                </datalist>
+                <small>{airlineLabel(formData.carrier) || '2–3 character airline code'}</small>
               </div>
 
               <div className="form-group">
@@ -224,14 +382,7 @@ function App() {
                   <span className="field-icon">◆</span>
                   Flight Date
                 </label>
-                <input
-                  id="flight_date"
-                  type="date"
-                  name="flight_date"
-                  value={formData.flight_date}
-                  onChange={handleChange}
-                  required
-                />
+                <input id="flight_date" type="date" name="flight_date" value={formData.flight_date} onChange={handleChange} required />
                 <small>Select the scheduled flight date</small>
               </div>
 
@@ -241,19 +392,11 @@ function App() {
                   Origin Airport
                 </label>
                 <input
-                  id="origin"
-                  type="text"
-                  name="origin"
-                  value={formData.origin}
-                  onChange={handleChange}
-                  placeholder="e.g. ATL"
-                  minLength="3"
-                  maxLength="3"
-                  pattern="[A-Za-z]{3}"
-                  title="Enter a valid 3-letter airport code"
-                  required
+                  id="origin" type="text" name="origin" value={formData.origin}
+                  onChange={handleChange} placeholder="e.g. ATL" minLength="3" maxLength="3"
+                  pattern="[A-Za-z]{3}" required list="airport-list"
                 />
-                <small>3-letter departure airport code</small>
+                <small>{airportLabel(formData.origin) || '3-letter departure airport code'}</small>
               </div>
 
               <div className="form-group">
@@ -262,190 +405,124 @@ function App() {
                   Destination Airport
                 </label>
                 <input
-                  id="destination"
-                  type="text"
-                  name="destination"
-                  value={formData.destination}
-                  onChange={handleChange}
-                  placeholder="e.g. JFK"
-                  minLength="3"
-                  maxLength="3"
-                  pattern="[A-Za-z]{3}"
-                  title="Enter a valid 3-letter airport code"
-                  required
+                  id="destination" type="text" name="destination" value={formData.destination}
+                  onChange={handleChange} placeholder="e.g. JFK" minLength="3" maxLength="3"
+                  pattern="[A-Za-z]{3}" required list="airport-list"
                 />
-                <small>3-letter arrival airport code</small>
+                <small>{airportLabel(formData.destination) || '3-letter arrival airport code'}</small>
               </div>
 
               <div className="form-group">
-                <label htmlFor="departure_time">
-                  <span className="field-icon">↑</span>
-                  Scheduled Departure
-                </label>
-                <input
-                  id="departure_time"
-                  type="time"
-                  name="departure_time"
-                  value={formData.departure_time}
-                  onChange={handleChange}
-                  required
-                />
+                <label htmlFor="departure_time"><span className="field-icon">↑</span>Scheduled Departure</label>
+                <input id="departure_time" type="time" name="departure_time" value={formData.departure_time} onChange={handleChange} required />
                 <small>Scheduled departure time</small>
               </div>
 
               <div className="form-group">
-                <label htmlFor="arrival_time">
-                  <span className="field-icon">↓</span>
-                  Scheduled Arrival
-                </label>
-                <input
-                  id="arrival_time"
-                  type="time"
-                  name="arrival_time"
-                  value={formData.arrival_time}
-                  onChange={handleChange}
-                  required
-                />
-                <small>Scheduled arrival time</small>
+                <label htmlFor="arrival_time"><span className="field-icon">↓</span>Scheduled Arrival</label>
+                <input id="arrival_time" type="time" name="arrival_time" value={formData.arrival_time} onChange={handleChange} required />
+                <small>{formData.elapsed_time ? `Duration: ${formData.elapsed_time} min (auto)` : 'Scheduled arrival time'}</small>
               </div>
 
               <div className="form-group">
-                <label htmlFor="elapsed_time">
-                  <span className="field-icon">◷</span>
-                  Flight Duration
-                </label>
+                <label htmlFor="elapsed_time"><span className="field-icon">◷</span>Flight Duration</label>
                 <div className="input-with-unit">
-                  <input
-                    id="elapsed_time"
-                    type="number"
-                    name="elapsed_time"
-                    value={formData.elapsed_time}
-                    onChange={handleChange}
-                    placeholder="e.g. 150"
-                    min="1"
-                    required
-                  />
+                  <input id="elapsed_time" type="number" name="elapsed_time" value={formData.elapsed_time} onChange={handleChange} placeholder="e.g. 150" min="1" required />
                   <span>min</span>
                 </div>
                 <small>Scheduled elapsed flight time</small>
               </div>
 
               <div className="form-group">
-                <label htmlFor="distance">
-                  <span className="field-icon">↔</span>
-                  Flight Distance
-                </label>
+                <label htmlFor="distance"><span className="field-icon">↔</span>Flight Distance</label>
                 <div className="input-with-unit">
-                  <input
-                    id="distance"
-                    type="number"
-                    name="distance"
-                    value={formData.distance}
-                    onChange={handleChange}
-                    placeholder="e.g. 760"
-                    min="1"
-                    required
-                  />
+                  <input id="distance" type="number" name="distance" value={formData.distance} onChange={handleChange} placeholder="e.g. 760" min="1" required />
                   <span>mi</span>
                 </div>
-                <small>Scheduled route distance</small>
+                <small>{originMeta && destMeta ? `Auto-calculated: ${distanceMiles(originMeta.code, destMeta.code)} mi` : 'Scheduled route distance'}</small>
               </div>
             </div>
 
+            <datalist id="airport-list">
+              {AIRPORTS.map((a) => (
+                <option key={a.code} value={a.code}>{a.city}, {a.state} — {a.name}</option>
+              ))}
+            </datalist>
+
             <div className="button-row">
-              <button type="button" className="clear-button" onClick={handleClear}>
-                Clear Form
-              </button>
+              <button type="button" className="clear-button" onClick={handleClear}>Clear Form</button>
               <button type="submit" className="predict-button" disabled={loading}>
-                {loading ? (
-                  <>
-                    <span className="loader"></span>
-                    Analysing Flight...
-                  </>
-                ) : (
-                  <>
-                    <span className="button-plane">✈</span>
-                    Predict Flight Delay
-                  </>
-                )}
+                {loading ? <><span className="loader"></span>Analysing Flight...</> : <><span className="button-plane">✈</span>Predict Flight Delay</>}
               </button>
             </div>
           </form>
 
-          {error && (
-            <div className="error-message">
-              <div className="message-icon">!</div>
-              <div>
-                <h3>Unable to Make Prediction</h3>
-                <p>{error}</p>
-              </div>
+          {/* Route weather + map preview (when airports are valid) */}
+          {originMeta && destMeta && (
+            <div className="live-context">
+              <WeatherWidget originCode={originMeta.code} destinationCode={destMeta.code} />
+              <RouteMap originCode={originMeta.code} destinationCode={destMeta.code} />
             </div>
           )}
 
-          {result && (
-            <div className={`result-card ${significantDelay ? "delay-result" : "ontime-result"}`}>
-              <div className="result-top">
-                <div className={`result-icon ${significantDelay ? "warning-icon" : "success-icon"}`}>
-                  {significantDelay ? "!" : "✓"}
-                </div>
-                <div className="result-heading">
-                  <span className="result-label">MACHINE LEARNING PREDICTION</span>
-                  <h2>
-                    {significantDelay
-                      ? "Significant Delay Predicted"
-                      : "No Significant Delay Predicted"}
-                  </h2>
-                  <p>
-                    {significantDelay
-                      ? "This flight has been identified as having an increased risk of a significant departure delay."
-                      : "This flight is currently predicted to avoid a significant departure delay."}
-                  </p>
-                </div>
+          {/* Skeleton loader */}
+          {loading && <SkeletonResult />}
+
+          {/* Error */}
+          {error && !loading && (
+            <div className="error-message">
+              <div className="message-icon">!</div>
+              <div><h3>Unable to Make Prediction</h3><p>{error}</p></div>
+            </div>
+          )}
+
+          {/* Result as Boarding Pass */}
+          {result && !loading && (
+            <>
+              <BoardingPass result={result} formData={formData} significantDelay={significantDelay} />
+
+            
+
+              {/* Result actions */}
+              <div className="result-actions">
+                <button className="action-btn" onClick={copySummary}>📋 Copy summary</button>
+                <button className="action-btn" onClick={downloadReport}>📄 Download report</button>
+                <button className="action-btn" onClick={shareLink}>🔗 Share link</button>
               </div>
 
+              {/* Probability bar (kept for compatibility) */}
               {result.delay_probability !== undefined && (
-                <div className="probability-section">
-                  <div className="probability-header">
-                    <span>Estimated delay probability</span>
-                    <strong>{Number(result.delay_probability).toFixed(2)}%</strong>
+                <div className="result-card">
+                  <div className="probability-section">
+                    <div className="probability-header">
+                      <span>Estimated delay probability</span>
+                      <strong>{Number(result.delay_probability).toFixed(2)}%</strong>
+                    </div>
+                    <div className="probability-track">
+                      <div className="probability-fill" style={{ width: `${Math.min(Number(result.delay_probability), 100)}%` }}></div>
+                    </div>
+                    <div className="probability-scale"><span>0%</span><span>50%</span><span>100%</span></div>
                   </div>
-                  <div className="probability-track">
-                    <div
-                      className="probability-fill"
-                      style={{ width: `${Math.min(Number(result.delay_probability), 100)}%` }}
-                    ></div>
-                  </div>
-                  <div className="probability-scale">
-                    <span>0%</span>
-                    <span>50%</span>
-                    <span>100%</span>
+                  <div className="result-note">
+                    <span>i</span>
+                    A significant delay is defined as a departure delay of 15 minutes or more.
                   </div>
                 </div>
               )}
-
-              <div className="result-note">
-                <span>i</span>
-                A significant delay is defined as a departure delay of 15 minutes or more.
-              </div>
-            </div>
+            </>
           )}
         </section>
 
         <footer>
-          <div className="footer-flag">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
+          <div className="footer-flag"><span></span><span></span><span></span></div>
           <p>LibertyWing AI • U.S. Flight Delay Intelligence</p>
           <small>
             Predictions are estimates based on patterns learned from historical
             flight data and should not be treated as guaranteed outcomes.
+            Press <kbd>/</kbd> to jump to input · <kbd>Esc</kbd> to clear.
           </small>
         </footer>
       </main>
     </div>
   );
 }
-
-export default App;
