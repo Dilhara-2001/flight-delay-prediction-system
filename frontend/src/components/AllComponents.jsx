@@ -67,7 +67,7 @@ export function DepartureBoard() {
   return (
     <div className="departure-board">
       <div className="board-header">
-        <span className="board-title">🛫 LIVE DEPARTURES</span>
+        <span className="board-title">🛫 SAMPLE DEPARTURE BOARD <em>DEMO</em></span>
         <span className="board-clock">
           {now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
         </span>
@@ -273,7 +273,7 @@ export function WeatherWidget({ originCode, destinationCode }) {
 
   return (
     <div className="weather-widget">
-      <span className="weather-label">Route weather</span>
+      <span className="weather-label">Live route weather · context only</span>
       <div className="weather-items">
         {origin && (
           <div className="weather-item">
@@ -338,10 +338,10 @@ export function OnboardingTour({ onDone }) {
   const [step, setStep] = useState(0);
 
   const STEPS = [
-    { title: 'Welcome to LibertyWing AI ✈️', body: 'Predict departure delays using our machine learning model — trained on millions of U.S. flights.' },
+    { title: 'Welcome to LibertyWing AI ✈️', body: 'Predict departure delays using a model developed from more than 500,000 U.S. flight records from January 2025.' },
     { title: '1. Enter flight details', body: 'Type the carrier code (e.g. DL for Delta) and airport codes (ATL, JFK). Use popular route chips for speed.' },
     { title: '2. Get instant predictions', body: 'Our model estimates whether your departure may be delayed 15+ minutes.' },
-    { title: '3. Read the risk gauge', body: 'You will see a detailed boarding-pass style result with delay probability and weather context.' },
+    { title: '3. Read the risk gauge', body: 'You will see a boarding-pass style result with an estimated delay probability. Live weather is shown as context only and is not used by the model.' },
   ];
 
   const finish = () => {
@@ -375,73 +375,200 @@ export function OnboardingTour({ onDone }) {
 /* ============================================
    11. COMPARISON MODE
    ============================================ */
-export function ComparisonMode({ onClose }) {
-  const [a, setA] = useState({ carrier: 'DL', origin: 'ATL', destination: 'JFK', elapsed_time: 120, distance: 760 });
-  const [b, setB] = useState({ carrier: 'AA', origin: 'ATL', destination: 'JFK', elapsed_time: 125, distance: 760 });
+export function ComparisonMode({ onClose, onToast }) {
+  const makeFlight = (carrier) => ({
+    carrier,
+    origin: 'ATL',
+    destination: 'JFK',
+    flight_date: '2025-01-15',
+    departure_time: carrier === 'DL' ? '18:30' : '19:15',
+    arrival_time: carrier === 'DL' ? '20:30' : '21:20',
+    elapsed_time: carrier === 'DL' ? 120 : 125,
+    distance: distanceMiles('ATL', 'JFK') || 760,
+  });
+
+  const [a, setA] = useState(makeFlight('DL'));
+  const [b, setB] = useState(makeFlight('AA'));
   const [resA, setResA] = useState(null);
   const [resB, setResB] = useState(null);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const update = (setter, current, key, value) => {
+    const next = { ...current, [key]: value };
+
+    if ((key === 'origin' || key === 'destination') && next.origin && next.destination) {
+      const d = distanceMiles(next.origin.toUpperCase(), next.destination.toUpperCase());
+      if (d) next.distance = d;
+    }
+
+    if ((key === 'departure_time' || key === 'arrival_time') && next.departure_time && next.arrival_time) {
+      const [dh, dm] = next.departure_time.split(':').map(Number);
+      const [ah, am] = next.arrival_time.split(':').map(Number);
+      let mins = ah * 60 + am - (dh * 60 + dm);
+      if (mins < 0) mins += 24 * 60;
+      if (mins > 0 && mins < 24 * 60) next.elapsed_time = mins;
+    }
+
+    setter(next);
+  };
+
+  const predictOne = async (flight) => {
+    const response = await fetch('/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...flight,
+        carrier: String(flight.carrier).trim().toUpperCase(),
+        origin: String(flight.origin).trim().toUpperCase(),
+        destination: String(flight.destination).trim().toUpperCase(),
+        elapsed_time: Number(flight.elapsed_time),
+        distance: Number(flight.distance),
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Unable to compare flights.');
+    return data;
+  };
 
   const runCompare = async () => {
     setLoading(true);
+    setError('');
+    setResA(null);
+    setResB(null);
+
     try {
-      const ra = await fetch('/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(a),
-      }).then((r) => r.json());
-      const rb = await fetch('/predict', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(b),
-      }).then((r) => r.json());
-      setResA(ra);
-      setResB(rb);
-    } catch {
-      // ignore
+      const [first, second] = await Promise.all([predictOne(a), predictOne(b)]);
+      setResA(first);
+      setResB(second);
+      onToast?.('success', 'Comparison ready', 'Both flights were evaluated by the model.');
+    } catch (err) {
+      setError(err.message);
+      onToast?.('error', 'Comparison failed', err.message);
     } finally {
       setLoading(false);
     }
   };
 
+  const FlightColumn = ({ title, value, setter, result }) => (
+    <div className="compare-col">
+      <h4>{title}</h4>
+
+      <label>
+        <span>Carrier</span>
+        <input
+          value={value.carrier}
+          onChange={(e) => update(setter, value, 'carrier', e.target.value.toUpperCase())}
+          placeholder="DL"
+          maxLength={3}
+        />
+      </label>
+
+      <div className="compare-mini-grid">
+        <label>
+          <span>Origin</span>
+          <input
+            value={value.origin}
+            onChange={(e) => update(setter, value, 'origin', e.target.value.toUpperCase())}
+            placeholder="ATL"
+            maxLength={3}
+          />
+        </label>
+        <label>
+          <span>Destination</span>
+          <input
+            value={value.destination}
+            onChange={(e) => update(setter, value, 'destination', e.target.value.toUpperCase())}
+            placeholder="JFK"
+            maxLength={3}
+          />
+        </label>
+      </div>
+
+      <label>
+        <span>Flight date</span>
+        <input
+          type="date"
+          value={value.flight_date}
+          onChange={(e) => update(setter, value, 'flight_date', e.target.value)}
+        />
+      </label>
+
+      <div className="compare-mini-grid">
+        <label>
+          <span>Departure</span>
+          <input
+            type="time"
+            value={value.departure_time}
+            onChange={(e) => update(setter, value, 'departure_time', e.target.value)}
+          />
+        </label>
+        <label>
+          <span>Arrival</span>
+          <input
+            type="time"
+            value={value.arrival_time}
+            onChange={(e) => update(setter, value, 'arrival_time', e.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="compare-mini-grid">
+        <label>
+          <span>Duration (min)</span>
+          <input
+            type="number"
+            min="1"
+            value={value.elapsed_time}
+            onChange={(e) => update(setter, value, 'elapsed_time', e.target.value)}
+          />
+        </label>
+        <label>
+          <span>Distance (mi)</span>
+          <input
+            type="number"
+            min="1"
+            value={value.distance}
+            onChange={(e) => update(setter, value, 'distance', e.target.value)}
+          />
+        </label>
+      </div>
+
+      {result && (
+        <div className={`compare-result ${result.prediction === 'Significant Delay' ? 'cr-delay' : 'cr-ontime'}`}>
+          <span>{result.prediction}</span>
+          <strong>{Number(result.delay_probability || 0).toFixed(1)}%</strong>
+          <small>estimated delay probability</small>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="compare-modal" role="dialog" aria-modal="true">
       <div className="compare-card">
         <div className="compare-head">
-          <h3>⚖️ Compare Two Flights</h3>
+          <div>
+            <span className="compare-kicker">MODEL SIDE-BY-SIDE</span>
+            <h3>⚖️ Compare Two Flights</h3>
+          </div>
           <button onClick={onClose} className="compare-close" aria-label="Close">×</button>
         </div>
 
-        <div className="compare-grid">
-          <div className="compare-col">
-            <h4>Flight A</h4>
-            <input value={a.carrier} onChange={(e) => setA({ ...a, carrier: e.target.value.toUpperCase() })} placeholder="Carrier" maxLength={3} />
-            <input value={a.origin} onChange={(e) => setA({ ...a, origin: e.target.value.toUpperCase() })} placeholder="Origin" maxLength={3} />
-            <input value={a.destination} onChange={(e) => setA({ ...a, destination: e.target.value.toUpperCase() })} placeholder="Destination" maxLength={3} />
-            {resA && (
-              <div className={`compare-result ${resA.prediction === 'Significant Delay' ? 'cr-delay' : 'cr-ontime'}`}>
-                <span>{resA.prediction === 'Significant Delay' ? 'HIGH RISK' : 'LOW RISK'}</span>
-                <strong>{Number(resA.delay_probability || 0).toFixed(1)}%</strong>
-              </div>
-            )}
-          </div>
+        <p className="compare-help">
+          Compare two complete scheduled-flight scenarios using the same final Gradient Boosting model.
+        </p>
 
-          <div className="compare-col">
-            <h4>Flight B</h4>
-            <input value={b.carrier} onChange={(e) => setB({ ...b, carrier: e.target.value.toUpperCase() })} placeholder="Carrier" maxLength={3} />
-            <input value={b.origin} onChange={(e) => setB({ ...b, origin: e.target.value.toUpperCase() })} placeholder="Origin" maxLength={3} />
-            <input value={b.destination} onChange={(e) => setB({ ...b, destination: e.target.value.toUpperCase() })} placeholder="Destination" maxLength={3} />
-            {resB && (
-              <div className={`compare-result ${resB.prediction === 'Significant Delay' ? 'cr-delay' : 'cr-ontime'}`}>
-                <span>{resB.prediction === 'Significant Delay' ? 'HIGH RISK' : 'LOW RISK'}</span>
-                <strong>{Number(resB.delay_probability || 0).toFixed(1)}%</strong>
-              </div>
-            )}
-          </div>
+        <div className="compare-grid">
+          <FlightColumn title="Flight A" value={a} setter={setA} result={resA} />
+          <FlightColumn title="Flight B" value={b} setter={setB} result={resB} />
         </div>
 
+        {error && <div className="compare-error">{error}</div>}
+
         <button className="compare-run" onClick={runCompare} disabled={loading}>
-          {loading ? 'Analysing...' : '⚖️ Compare'}
+          {loading ? 'Analysing both flights...' : '⚖️ Compare Flights'}
         </button>
       </div>
     </div>

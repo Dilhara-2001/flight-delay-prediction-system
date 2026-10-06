@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import './App.css';
+
+import HomePage from './pages/HomePage';
+import EDAPage from './pages/EDAPage';
+
 import { AIRPORTS, AIRPORTS_BY_CODE, airportLabel, distanceMiles } from './data/airports';
 import { AIRLINES, airlineLabel } from './data/airlines';
 import {
@@ -27,7 +31,19 @@ const BLANK = {
   distance: '',
 };
 
+const SAMPLE_FLIGHT = {
+  carrier: 'DL',
+  origin: 'ATL',
+  destination: 'JFK',
+  flight_date: '2025-01-15',
+  departure_time: '18:30',
+  arrival_time: '20:30',
+  elapsed_time: '120',
+  distance: String(distanceMiles('ATL', 'JFK') || 760),
+};
+
 export default function App() {
+const [currentPage, setCurrentPage] = useState("home");
   /* ---------- Theme ---------- */
   const [theme, setTheme] = useState(
     () => localStorage.getItem('lw_theme') || 'light'
@@ -119,6 +135,14 @@ export default function App() {
     setResult(null);
     setError('');
     pushToast('info', 'Form cleared', 'All fields have been reset.');
+  };
+
+  const loadSampleFlight = () => {
+    setFormData(SAMPLE_FLIGHT);
+    setResult(null);
+    setError('');
+    pushToast('info', 'Sample loaded', 'ATL → JFK sample flight is ready to predict.');
+    setTimeout(() => document.getElementById('carrier')?.focus(), 0);
   };
 
   const quickPickRoute = (from, to) => {
@@ -250,34 +274,106 @@ Delay probability: ${Number(result.delay_probability ?? 0).toFixed(2)}%`;
       <Toast toasts={toasts} dismiss={dismissToast} />
 
       {/* ---------- Onboarding ---------- */}
-      {showTour && <OnboardingTour onDone={() => setShowTour(false)} />}
+      {showTour && currentPage === 'prediction' && (
+        <OnboardingTour onDone={() => setShowTour(false)} />
+      )}
 
       {/* ---------- Comparison Modal ---------- */}
-      {showCompare && <ComparisonMode onClose={() => setShowCompare(false)} />}
+      {showCompare && <ComparisonMode onClose={() => setShowCompare(false)} onToast={pushToast} />}
 
       <main className="main-wrapper">
         {/* Brand bar */}
-        <div className="brand-bar">
-          <div className="brand">
-            <div className="brand-icon">✈</div>
-            <div>
-              <span className="brand-title">LibertyWing AI</span>
-              <span className="brand-subtitle">Departure Delay Prediction</span>
-            </div>
+        
+        {/* ---------- Top Navigation ---------- */}
+      <div className="brand-bar">
+        <button
+          type="button"
+          className="brand brand-button"
+          onClick={() => setCurrentPage('home')}
+        >
+          <div className="brand-icon">✈</div>
+
+          <div>
+            <span className="brand-title">LibertyWing AI</span>
+            <span className="brand-subtitle">
+              Departure Delay Prediction
+            </span>
           </div>
-          <div className="brand-actions">
-            <button className="compare-trigger" onClick={() => setShowCompare(true)}>
+        </button>
+
+        <nav className="main-nav" aria-label="Main navigation">
+          <button
+            type="button"
+            className={`nav-link ${currentPage === 'home' ? 'active' : ''}`}
+            onClick={() => {
+              setCurrentPage('home');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          >
+            Home
+          </button>
+
+          <button
+            type="button"
+            className={`nav-link ${currentPage === 'eda' ? 'active' : ''}`}
+            onClick={() => {
+              setCurrentPage('eda');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          >
+            EDA
+          </button>
+
+          <button
+            type="button"
+            className={`nav-link ${currentPage === 'prediction' ? 'active' : ''}`}
+            onClick={() => {
+              setCurrentPage('prediction');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          >
+            Prediction
+          </button>
+        </nav>
+
+        <div className="brand-actions">
+          {currentPage === 'prediction' && (
+            <button
+              type="button"
+              className="compare-trigger"
+              onClick={() => setShowCompare(true)}
+            >
               ⚖️ Compare
             </button>
-            <ThemeToggle theme={theme} setTheme={setTheme} />
-            <div className="model-badge">
-              <span className="status-dot"></span>
-              Model Live
-            </div>
+          )}
+
+          <ThemeToggle theme={theme} setTheme={setTheme} />
+
+          <div className="model-badge">
+            <span className="status-dot"></span>
+            Model Live
           </div>
         </div>
+      </div>
+      {currentPage === 'home' && (
+                  <HomePage
+                    onOpenPrediction={() => {
+                      setCurrentPage('prediction');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    onOpenEDA={() => {
+                      setCurrentPage('eda');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                  />
+                )}
 
-        <section className="prediction-card">
+                {currentPage === 'eda' && (
+                  <EDAPage />
+                )}
+
+                {currentPage === 'prediction' && (
+                  <section className="prediction-card">
           {/* HERO */}
           <div className="hero-section">
             <div className="hero-map-grid" aria-hidden="true"></div>
@@ -304,11 +400,14 @@ Delay probability: ${Number(result.delay_probability ?? 0).toFixed(2)}%`;
                 <span> leave on time?</span>
               </h1>
               <p>
-                Enter your scheduled flight information and our machine
-                learning model will estimate whether the departure may be
-                delayed by 15 minutes or more.
+                Enter information available before departure and our
+                Gradient Boosting model will estimate whether the flight may
+                depart 15 minutes or more late.
               </p>
               <div className="hero-cta">
+                <button type="button" className="hero-sample-btn" onClick={loadSampleFlight}>
+                  ✦ Load sample flight
+                </button>
                 <span className="hero-hint">Press <kbd>/</kbd> to jump to input · <kbd>⌘/Ctrl+↵</kbd> to predict</span>
               </div>
             </div>
@@ -319,12 +418,12 @@ Delay probability: ${Number(result.delay_probability ?? 0).toFixed(2)}%`;
                 <span className="hero-stat-value live">Live</span>
               </div>
               <div className="hero-stat">
-                <span className="hero-stat-label">Airports</span>
-                <span className="hero-stat-value">350+</span>
+                <span className="hero-stat-label">Recall</span>
+                <span className="hero-stat-value">60.05%</span>
               </div>
               <div className="hero-stat">
-                <span className="hero-stat-label">Accuracy</span>
-                <span className="hero-stat-value">94.2%</span>
+                <span className="hero-stat-label">F1-score</span>
+                <span className="hero-stat-value">23.59%</span>
               </div>
             </div>
           </div>
@@ -339,6 +438,22 @@ Delay probability: ${Number(result.delay_probability ?? 0).toFixed(2)}%`;
             <RouteChips onPick={quickPickRoute} />
           </div>
 
+          <div className="model-facts-panel">
+            <div className="model-fact-main">
+              <span className="model-fact-kicker">FINAL MODEL</span>
+              <strong>Gradient Boosting with Balanced Sample Weights</strong>
+              <small>
+                Selected using F1-score as the primary metric for the imbalanced delay target.
+              </small>
+            </div>
+            <div className="model-fact-metrics">
+              <div><span>Precision</span><strong>14.67%</strong></div>
+              <div><span>Recall</span><strong>60.05%</strong></div>
+              <div><span>ROC-AUC</span><strong>59.64%</strong></div>
+              <div><span>PR-AUC</span><strong>15.31%</strong></div>
+            </div>
+          </div>
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="prediction-form">
             <div className="form-heading">
@@ -346,7 +461,10 @@ Delay probability: ${Number(result.delay_probability ?? 0).toFixed(2)}%`;
                 <h2>Flight Information</h2>
                 <p>Complete all fields to generate a prediction.</p>
               </div>
-              <span className="required-note">* All fields required</span>
+              <div className="form-heading-actions">
+                <button type="button" className="sample-inline-btn" onClick={loadSampleFlight}>Use sample</button>
+                <span className="required-note">* All fields required</span>
+              </div>
             </div>
 
             <div className="form-grid">
@@ -459,9 +577,15 @@ Delay probability: ${Number(result.delay_probability ?? 0).toFixed(2)}%`;
 
           {/* Route weather + map preview (when airports are valid) */}
           {originMeta && destMeta && (
-            <div className="live-context">
-              <WeatherWidget originCode={originMeta.code} destinationCode={destMeta.code} />
-              <RouteMap originCode={originMeta.code} destinationCode={destMeta.code} />
+            <div className="live-context-wrap">
+              <div className="context-note">
+                <span>Live route context</span>
+                <small>Weather is shown for user context only and is not an input to the trained model.</small>
+              </div>
+              <div className="live-context">
+                <WeatherWidget originCode={originMeta.code} destinationCode={destMeta.code} />
+                <RouteMap originCode={originMeta.code} destinationCode={destMeta.code} />
+              </div>
             </div>
           )}
 
@@ -512,10 +636,11 @@ Delay probability: ${Number(result.delay_probability ?? 0).toFixed(2)}%`;
             </>
           )}
         </section>
+        )}
 
         <footer>
           <div className="footer-flag"><span></span><span></span><span></span></div>
-          <p>LibertyWing AI • U.S. Flight Delay Intelligence</p>
+          <p>LibertyWing AI • January 2025 U.S. Flight Delay Intelligence</p>
           <small>
             Predictions are estimates based on patterns learned from historical
             flight data and should not be treated as guaranteed outcomes.
