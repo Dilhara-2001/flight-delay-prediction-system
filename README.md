@@ -5,7 +5,7 @@ IT3051 – Fundamentals of Data Mining Mini Project 2026
 ## Project Objective
 
 Predict whether a flight will experience a departure delay of
-15 minutes or more using information available before departure.
+15 minutes or more using information available before departure
 
 ## Final Model
 
